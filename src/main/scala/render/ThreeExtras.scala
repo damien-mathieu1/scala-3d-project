@@ -23,3 +23,14 @@ class AmbientLight(color: js.Any = js.undefined, intensity: Double = 1.0) extend
 
 @js.native @JSImport("three", "DirectionalLight")
 class DirectionalLight(color: js.Any = js.undefined, intensity: Double = 1.0) extends THREE.Object3D
+
+@js.native @JSImport("three", "CylinderGeometry")
+class CylinderGeometry(
+  radiusTop:      Double = 1.0,
+  radiusBottom:   Double = 1.0,
+  height:         Double = 1.0,
+  radialSegments: Int    = 32
+) extends THREE.BufferGeometry
+
+@js.native @JSImport("three", "Group")
+class ThreeGroup() extends THREE.Object3D
