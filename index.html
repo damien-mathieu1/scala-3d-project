@@ -40,32 +40,78 @@
     /* ── BLACKJACK ────────────────────────────────────────────────────── */
     #panel-blackjack { display: none; }
 
+    /* Scores : dealer | balance | mise | joueur */
     #scores {
       position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 32px; z-index: 10; pointer-events: none;
+      display: flex; gap: 12px; z-index: 10; pointer-events: none;
     }
     .score {
-      padding: 8px 20px; border-radius: 8px;
+      padding: 7px 16px; border-radius: 8px;
       background: rgba(0,0,0,0.5); color: #f0f0f0;
-      font-size: 18px; font-weight: bold; backdrop-filter: blur(6px);
+      font-size: 16px; font-weight: bold; backdrop-filter: blur(6px);
     }
-    #dealer-score { color: #ffd700; }
+    #dealer-score      { color: #ffd700; }
+    #balance-display   { color: #90ee90; }
+    #bet-display       { color: #ffa040; }
+
     #result-msg {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       font-size: 42px; font-weight: bold;
       text-shadow: 0 2px 12px rgba(0,0,0,0.8);
       pointer-events: none; z-index: 10; min-height: 1em;
     }
-    #controls-bj {
-      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 12px; z-index: 10;
-    }
+
     #label-player, #label-dealer {
       position: fixed; left: 50%; transform: translateX(-50%);
       color: rgba(255,255,255,0.4); font-size: 13px; pointer-events: none; z-index: 10;
     }
     #label-dealer { top: 58px; }
     #label-player { bottom: 88px; }
+
+    /* ── BOUTONS JETONS (phase mise) ──────────────────────────────────── */
+    #betting-controls {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      display: none; flex-direction: column; align-items: center; gap: 14px; z-index: 10;
+    }
+    #chip-row { display: flex; gap: 14px; align-items: center; }
+
+    /* Jetons ronds comme en casino */
+    .chip-btn {
+      width: 66px; height: 66px; border-radius: 50%;
+      border: 4px dashed rgba(255,255,255,0.35);
+      font-weight: bold; font-size: 16px; cursor: pointer;
+      transition: all 0.15s; color: white;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+      line-height: 1;
+    }
+    #chip-5   { background: #cc2222; }
+    #chip-25  { background: #22aa44; }
+    #chip-50  { background: #2255cc; }
+    #chip-100 { background: #111111; color: #d4af37; border-color: #d4af37; }
+    .chip-btn:hover:not(:disabled) { transform: translateY(-5px) scale(1.1); filter: brightness(1.25); }
+    .chip-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; filter: none; }
+
+    #deal-row { display: flex; gap: 12px; }
+    #btn-deal      { background: #d4af37; color: #111111; }
+    #btn-clear-bet { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.3); }
+
+    /* ── BOUTONS JEU (phase partie) ───────────────────────────────────── */
+    #controls-bj {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      display: none; gap: 12px; z-index: 10;
+    }
+    #btn-hit    { background: #2ecc71; color: white; }
+    #btn-stand  { background: #e74c3c; color: white; }
+    #btn-double { background: #e6a817; color: #111; }
+    #btn-new    { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+
+    /* ── SHARED BUTTON STYLES ─────────────────────────────────────────── */
+    button {
+      padding: 12px 28px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 16px; font-weight: bold; transition: all 0.15s;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
     /* ── IMAGE VIEWER ─────────────────────────────────────────────────── */
     #panel-viewer { display: none; }
@@ -78,18 +124,6 @@
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
       color: rgba(255,255,255,0.35); font-size: 12px; pointer-events: none;
     }
-
-    /* ── SHARED BUTTON STYLES ─────────────────────────────────────────── */
-    button {
-      padding: 12px 28px; border-radius: 8px; border: none; cursor: pointer;
-      font-size: 16px; font-weight: bold; transition: all 0.15s;
-    }
-    #btn-hit   { background: #2ecc71; color: white; }
-    #btn-stand { background: #e74c3c; color: white; }
-    #btn-new   { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
-    button:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
-    button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
-
     .shape-btn {
       padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
       background: rgba(255,255,255,0.1); color: white; font-size: 14px;
@@ -105,14 +139,14 @@
 
   <!-- ── MENU ── -->
   <div id="panel-menu">
-    <h1>🎮 Scala 3D</h1>
+    <h1>Scala 3D</h1>
     <div class="menu-card" id="menu-btn-blackjack">
-      <span class="icon">🃏</span>
+      <span class="icon">&#x1F0CF;</span>
       <h2>Blackjack</h2>
-      <p>ADT · State monad · IO · Typeclasses</p>
+      <p>ADT &middot; State monad &middot; IO &middot; Typeclasses</p>
     </div>
     <div class="menu-card" id="menu-btn-viewer">
-      <span class="icon">🖼️</span>
+      <span class="icon">&#x1F5BC;&#xFE0F;</span>
       <h2>Visionneur 3D</h2>
       <p>Importe une image et visualise-la en 3D</p>
     </div>
@@ -120,34 +154,56 @@
 
   <!-- ── BLACKJACK ── -->
   <div id="panel-blackjack">
-    <button class="back-btn" id="back-from-blackjack" style="display:block">← Menu</button>
+    <button class="back-btn" id="back-from-blackjack" style="display:block">&#x2190; Menu</button>
+
+    <!-- Scores toujours visibles -->
     <div id="scores">
-      <span class="score" id="dealer-score">Dealer: 0</span>
-      <span class="score" id="player-score">Joueur: 0</span>
+      <span class="score" id="dealer-score"></span>
+      <span class="score" id="balance-display">1000&#x20AC;</span>
+      <span class="score" id="bet-display">Mise: 0&#x20AC;</span>
+      <span class="score" id="player-score"></span>
     </div>
+
     <div id="result-msg"></div>
     <div id="label-dealer">Dealer</div>
     <div id="label-player">Joueur</div>
+
+    <!-- Controles phase mise -->
+    <div id="betting-controls">
+      <div id="chip-row">
+        <button class="chip-btn" id="chip-5">5</button>
+        <button class="chip-btn" id="chip-25">25</button>
+        <button class="chip-btn" id="chip-50">50</button>
+        <button class="chip-btn" id="chip-100">100</button>
+      </div>
+      <div id="deal-row">
+        <button id="btn-clear-bet">Annuler</button>
+        <button id="btn-deal" disabled>Distribuer</button>
+      </div>
+    </div>
+
+    <!-- Controles phase partie -->
     <div id="controls-bj">
       <button id="btn-hit">Carte</button>
       <button id="btn-stand">Rester</button>
+      <button id="btn-double" disabled>Doubler</button>
       <button id="btn-new">Nouvelle partie</button>
     </div>
   </div>
 
   <!-- ── IMAGE VIEWER ── -->
   <div id="panel-viewer">
-    <button class="back-btn" id="back-from-viewer" style="display:block">← Menu</button>
+    <button class="back-btn" id="back-from-viewer" style="display:block">&#x2190; Menu</button>
     <div id="controls-viewer">
-      <label for="viewer-file" class="shape-btn">📁 Ouvrir image</label>
+      <label for="viewer-file" class="shape-btn">&#x1F4C1; Ouvrir image</label>
       <input type="file" id="viewer-file" accept="image/*">
       <button class="shape-btn active" id="viewer-btn-plane">Plan</button>
       <button class="shape-btn" id="viewer-btn-box">Cube</button>
-      <button class="shape-btn" id="viewer-btn-sphere">Sphère</button>
+      <button class="shape-btn" id="viewer-btn-sphere">Sph&#xe8;re</button>
     </div>
-    <p id="hint">Clic + glisser pour tourner · Molette pour zoomer · Clic droit pour déplacer</p>
+    <p id="hint">Clic + glisser pour tourner &middot; Molette pour zoomer &middot; Clic droit pour d&#xe9;placer</p>
   </div>
 
-  <script src="./image3d-fastopt-bundle.js"></script>
+  <script src="./image3d-fastopt-bundle.js?v=35"></script>
 </body>
 </html>
