@@ -13,10 +13,10 @@ import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 import scala.math.Pi
 
-private val PLAYER_ROW = -0.3
-private val DEALER_ROW =  1.9
+private val PLAYER_ROW = -1.2
+private val DEALER_ROW =  1.2
 private val ROW_GAP    =  1.2
-private val CHIP_ROW   = -1.5
+private val CHIP_ROW   = -2.5
 
 private case class RenderState(
   game:     GameState,
@@ -40,11 +40,15 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   var rs: RenderState = RenderState(bettingState().unsafeRun())
   def update(f: RenderState => RenderState): Unit = rs = f(rs)
 
+  // Drag state — boundary vars for mouse interaction only
   var dragMesh:  js.UndefOr[Mesh] = js.undefined
   var dragChips: Boolean           = false
   var lastX = 0.0; var lastY = 0.0
 
   def rowX(n: Int, i: Int): Double = -(n - 1) * ROW_GAP / 2 + i * ROW_GAP
+
+  // Pure scene transitions: RenderState => RenderState
+  // Three.js mutations are side effects at the boundary
 
   def addCardToScene(mesh: Mesh, x: Double, y: Double, delay: Double = 0): RenderState => RenderState = s =>
     mesh.position.set(x, y, 0)
@@ -100,11 +104,15 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     }
 
   def addChip(denomination: Int): RenderState => RenderState = s =>
-    val z    = (s.chips.length.toDouble * 0.14).min(0.98)
-    val mesh = makeChipMesh(denomination)
+    val n     = s.chips.length + 1
+    val scale = (1.0 / math.sqrt(n.toDouble)).max(0.35)
+    val z     = s.chips.length.toDouble * 0.015
+    val mesh  = makeChipMesh(denomination)
     mesh.position.set(0.0, CHIP_ROW, z)
     mesh.rotation.asInstanceOf[js.Dynamic].x = Pi / 2 + s.rotX
     mesh.rotation.asInstanceOf[js.Dynamic].y = s.rotY
+    mesh.scale.set(scale, scale, scale)
+    s.chips.foreach(_.scale.set(scale, scale, scale))
     scene.add(mesh)
     s.copy(chips = s.chips :+ mesh)
 
@@ -122,6 +130,8 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     val cleaned = clearChips(s)
     cleaned.cards.foreach(m => scene.remove(m))
     cleaned.copy(cards = Nil, holeCard = js.undefined, game = bettingState(s.game.balance).unsafeRun())
+
+  // UI helpers
 
   def el(id: String)  = document.getElementById(id).asInstanceOf[dom.html.Element]
   def btn(id: String) = document.getElementById(id).asInstanceOf[dom.html.Button]
@@ -184,10 +194,6 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
       case GamePhase.Betting =>
         showBettingPhase()
         btn("btn-deal").disabled = rs.game.bet == 0
-        List(5, 25, 50, 100).foreach { d =>
-          document.getElementById(s"chip-$d").asInstanceOf[dom.html.Button].disabled =
-            rs.game.balance < d || rs.game.bet + d > MAX_BET
-        }
       case GamePhase.PlayerTurn =>
         showGamePhase()
         setButtons(true, true, rs.game.playerHand.length == 2 && rs.game.balance >= rs.game.bet)
