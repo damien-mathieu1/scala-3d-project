@@ -1,6 +1,7 @@
 package model
 
 enum GamePhase:
+  case Betting
   case PlayerTurn
   case DealerTurn
   case Resolved(outcome: Outcome)
@@ -12,5 +13,7 @@ case class GameState(
   deck:       List[Card],
   playerHand: Hand,
   dealerHand: Hand,
-  phase:      GamePhase
+  phase:      GamePhase,
+  balance:    Int,
+  bet:        Int
 )
