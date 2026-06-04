@@ -11,4 +11,4 @@ val fullDeck: List[Card] =
 val shuffledDeck: IO[List[Card]] = IO(scala.util.Random.shuffle(fullDeck))
 
 def bettingState(balance: Int = 1000): IO[GameState] =
-  shuffledDeck.map(deck => GameState(deck, Nil, Nil, GamePhase.Betting, balance, 0))
+  shuffledDeck.map(deck => GameState(deck, Nil, 0, Nil, GamePhase.Betting, balance, 0))

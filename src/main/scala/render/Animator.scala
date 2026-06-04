@@ -35,3 +35,24 @@ def animateFlip(mesh: Mesh, onComplete: () => Unit = () => ()): Unit =
     if t >= 1.0 then onComplete()
     t < 1.0
   )
+
+def animateChipSpread(chips: List[Mesh], spread: Boolean): Unit =
+  val duration = 250.0
+  val startXs: Array[Double] = chips.map(_.position.x.asInstanceOf[Double]).toArray
+  val targetXs: Array[Double] = 
+    if spread then
+      val w = 0.6
+      val tot = (chips.length - 1) * w
+      (0 until chips.length).map(i => -tot / 2.0 + i * w).toArray
+    else
+      chips.indices.map(_ => 0.0).toArray
+      
+  val t0 = now()
+  Animator.add(() =>
+    val t = ((now() - t0) / duration).min(1.0)
+    val e = easeOut(t)
+    chips.zipWithIndex.foreach { case (m, i) =>
+      m.position.x = startXs(i) + (targetXs(i) - startXs(i)) * e
+    }
+    t < 1.0
+  )

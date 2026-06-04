@@ -13,10 +13,11 @@ import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 import scala.math.Pi
 
-private val PLAYER_ROW =  0.3
-private val DEALER_ROW =  2.2
-private val ROW_GAP    =  1.2
-private val CHIP_ROW   = -1.8
+private val PLAYER_ROW   =  0.3
+private val DEALER_ROW   =  2.2
+private val CHIP_ROW     = -1.8
+private val CLUSTER_SPAN =  4.0   // horizontal room shared by split hands
+private val CARD_GAP     =  0.5   // gap between cards inside one hand
 
 private case class CameraSetup(px: Double, py: Double, pz: Double,
                                 lx: Double, ly: Double, lz: Double)
@@ -29,14 +30,15 @@ private def applyCamera(cam: PerspectiveCamera, s: CameraSetup): Unit =
   cam.updateProjectionMatrix()
 
 private case class RenderState(
-  game:     GameState,
-  cards:    List[Mesh]       = Nil,
-  chips:    List[Mesh]       = Nil,
-  holeCard: js.UndefOr[Mesh] = js.undefined,
-  rotX:     Double           = 0.0,
-  rotY:     Double           = 0.0,
-  velX:     Double           = 0.0,
-  velY:     Double           = 0.0
+  game:        GameState,
+  playerCards: List[Mesh]       = Nil,
+  dealerCards: List[Mesh]       = Nil,
+  chips:       List[Mesh]       = Nil,
+  holeCard:    js.UndefOr[Mesh] = js.undefined,
+  rotX:        Double           = 0.0,
+  rotY:        Double           = 0.0,
+  velX:        Double           = 0.0,
+  velY:        Double           = 0.0
 )
 
 def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Canvas): Unit =
@@ -47,68 +49,87 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   var rs: RenderState = RenderState(bettingState().unsafeRun())
   def update(f: RenderState => RenderState): Unit = rs = f(rs)
 
-  // Drag state — boundary vars for mouse interaction only
-  var dragMesh:  js.UndefOr[Mesh] = js.undefined
-  var dragChips: Boolean           = false
-  var lastX = 0.0; var lastY = 0.0
+  // Interaction state
+  var chipsSpread: Boolean = false
+  val targetRotations = scala.collection.mutable.Map.empty[Mesh, Double]
+  val targetXOffsets = scala.collection.mutable.Map.empty[Mesh, Double]
+  val currentXOffsets = scala.collection.mutable.Map.empty[Mesh, Double]
 
-  def rowX(n: Int, i: Int): Double = -(n - 1) * ROW_GAP / 2 + i * ROW_GAP
+  Animator.add { () =>
+    (rs.playerCards ++ rs.dealerCards).foreach { m =>
+      val targetRot = targetRotations.getOrElse(m, 0.0)
+      m.rotation.z += (targetRot - m.rotation.z) * 0.15
+      
+      val targetOff = targetXOffsets.getOrElse(m, 0.0)
+      val currentOff = currentXOffsets.getOrElse(m, 0.0)
+      val newOff = currentOff + (targetOff - currentOff) * 0.15
+      m.position.x = m.position.x.asInstanceOf[Double] + (newOff - currentOff)
+      currentXOffsets(m) = newOff
+    }
+    true
+  }
+
+  // Cluster `i` of `h` hands is centered here; card `j` of `n` spreads around it.
+  def clusterCenter(h: Int, i: Int): Double =
+    if h <= 1 then 0.0 else -CLUSTER_SPAN / 2 + i * CLUSTER_SPAN / (h - 1)
+  def cardX(center: Double, n: Int, j: Int): Double =
+    center + (j - (n - 1) / 2.0) * CARD_GAP
 
   // Pure scene transitions: RenderState => RenderState
   // Three.js mutations are side effects at the boundary
 
-  def addCardToScene(mesh: Mesh, x: Double, y: Double, delay: Double = 0): RenderState => RenderState = s =>
-    mesh.position.set(x, y, 0)
-    scene.add(mesh)
-    animateSlide(mesh, x, delay)
-    s.copy(cards = s.cards :+ mesh)
-
+  // Initial deal: animate player hand + dealer up-card + face-down hole card.
   def deal: RenderState => RenderState = s =>
-    s.cards.foreach(m => scene.remove(m))
-    val ph  = s.game.playerHand
-    val dh  = s.game.dealerHand
-    val s1  = ph.zipWithIndex.foldLeft(s.copy(cards = Nil, holeCard = js.undefined)) {
-      case (acc, (card, i)) =>
-        addCardToScene(makeCardMesh(card), rowX(ph.length, i), PLAYER_ROW, i * 150.0)(acc)
+    (s.playerCards ++ s.dealerCards).foreach(m => scene.remove(m))
+    val hand = s.game.hands.head.cards
+    val dh   = s.game.dealerHand
+    val pn   = hand.length
+    val pMeshes = hand.zipWithIndex.map { (card, i) =>
+      val x = cardX(0.0, pn, i)
+      val m = makeCardMesh(card)
+      m.position.set(x, PLAYER_ROW, i * 0.01); scene.add(m); animateSlide(m, x, i * 150.0)
+      m
     }
-    val s2  = addCardToScene(makeCardMesh(dh(0)), rowX(2, 0), DEALER_ROW, ph.length * 150.0)(s1)
-    val hc  = makeHoleCardMesh(dh(1))
-    scene.add(hc)
-    hc.position.set(rowX(2, 1), DEALER_ROW, 0)
-    animateSlide(hc, rowX(2, 1), (ph.length + 1) * 150.0)
-    s2.copy(cards = s2.cards :+ hc, holeCard = hc)
+    val up = makeCardMesh(dh(0))
+    val ux = cardX(0.0, 2, 0)
+    up.position.set(ux, DEALER_ROW, 0.0); scene.add(up); animateSlide(up, ux, pn * 150.0)
+    val hc = makeHoleCardMesh(dh(1))
+    val hx = cardX(0.0, 2, 1)
+    hc.position.set(hx, DEALER_ROW, 0.01); scene.add(hc); animateSlide(hc, hx, (pn + 1) * 150.0)
+    s.copy(playerCards = pMeshes, dealerCards = List(up, hc), holeCard = hc)
 
-  def hit(card: Card): RenderState => RenderState = s =>
-    val n = s.game.playerHand.length
-    val (playerCards, _) = s.cards.partition(_.position.y.asInstanceOf[Double] < 0)
-    playerCards.zipWithIndex.foreach { (m, i) =>
-      m.position.set(rowX(n, i), PLAYER_ROW, m.position.z.asInstanceOf[Double])
+  // Redraw every player hand from state (split-aware); active hand sits forward.
+  def renderPlayer: RenderState => RenderState = s =>
+    s.playerCards.foreach(m => scene.remove(m))
+    val hs = s.game.hands
+    val H  = hs.length
+    val meshes = hs.zipWithIndex.flatMap { (hand, hi) =>
+      val center   = clusterCenter(H, hi)
+      val n        = hand.cards.length
+      val isActive = s.game.phase == GamePhase.PlayerTurn && hi == s.game.active
+      val y        = if isActive then PLAYER_ROW - 0.2 else PLAYER_ROW
+      hand.cards.zipWithIndex.map { (card, ci) =>
+        val x = cardX(center, n, ci)
+        val m = makeCardMesh(card)
+        m.position.set(x, y, ci * 0.01); scene.add(m)
+        m
+      }
     }
-    val mesh = makeCardMesh(card)
-    mesh.position.set(rowX(n, n - 1), PLAYER_ROW, 0)
-    scene.add(mesh)
-    animateSlide(mesh, rowX(n, n - 1))
-    s.copy(cards = s.cards :+ mesh)
+    s.copy(playerCards = meshes)
 
+  // Reveal the dealer's full hand face-up.
   def dealerReveal: RenderState => RenderState = s =>
-    s.cards.foreach(m => scene.remove(m))
-    val ph  = s.game.playerHand
-    val dh  = s.game.dealerHand
-    val s1  = ph.zipWithIndex.foldLeft(s.copy(cards = Nil, holeCard = js.undefined)) {
-      case (acc, (card, i)) =>
-        val mesh = makeCardMesh(card)
-        mesh.position.set(rowX(ph.length, i), PLAYER_ROW, 0)
-        scene.add(mesh)
-        acc.copy(cards = acc.cards :+ mesh)
+    s.dealerCards.foreach(m => scene.remove(m))
+    val dh = s.game.dealerHand
+    val n  = dh.length
+    val meshes = dh.zipWithIndex.map { (card, i) =>
+      val x = cardX(0.0, n, i)
+      val m = makeCardMesh(card)
+      m.position.set(x, DEALER_ROW, i * 0.01); scene.add(m)
+      if i >= 2 then animateSlide(m, x, (i - 2) * 200.0)
+      m
     }
-    dh.zipWithIndex.foldLeft(s1) {
-      case (acc, (card, i)) =>
-        val mesh = makeCardMesh(card)
-        mesh.position.set(rowX(dh.length, i), DEALER_ROW, 0)
-        scene.add(mesh)
-        if i >= 2 then animateSlide(mesh, rowX(dh.length, i), (i - 2) * 200.0)
-        acc.copy(cards = acc.cards :+ mesh)
-    }
+    s.copy(dealerCards = meshes, holeCard = js.undefined)
 
   def addChip(denomination: Int): RenderState => RenderState = s =>
     val n    = s.chips.length.toDouble
@@ -122,6 +143,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
 
   def clearChips: RenderState => RenderState = s =>
     s.chips.foreach(m => scene.remove(m))
+    chipsSpread = false
     s.copy(chips = Nil, rotX = 0.0, rotY = 0.0, velX = 0.0, velY = 0.0)
 
   def addChipsForAmount(amount: Int): RenderState => RenderState = startState =>
@@ -132,8 +154,9 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
 
   def newRound: RenderState => RenderState = s =>
     val cleaned = clearChips(s)
-    cleaned.cards.foreach(m => scene.remove(m))
-    cleaned.copy(cards = Nil, holeCard = js.undefined, game = bettingState(s.game.balance).unsafeRun())
+    (cleaned.playerCards ++ cleaned.dealerCards).foreach(m => scene.remove(m))
+    cleaned.copy(playerCards = Nil, dealerCards = Nil, holeCard = js.undefined,
+                 game = bettingState(s.game.balance).unsafeRun())
 
   // UI helpers
 
@@ -142,59 +165,100 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
 
   def setDisplay(id: String, d: String): Unit = el(id).style.display = d
 
-  def setButtons(h: Boolean, s: Boolean, d: Boolean = false): Unit =
-    btn("btn-hit").disabled    = !h
-    btn("btn-stand").disabled  = !s
-    btn("btn-double").disabled = !d
+  def setButtons(h: Boolean, s: Boolean, d: Boolean = false,
+                 sp: Boolean = false, su: Boolean = false): Unit =
+    btn("btn-hit").disabled       = !h
+    btn("btn-stand").disabled     = !s
+    btn("btn-double").disabled    = !d
+    btn("btn-split").disabled     = !sp
+    btn("btn-surrender").disabled = !su
 
   def showBettingPhase(): Unit =
-    setDisplay("betting-controls", "flex")
-    setDisplay("controls-bj",      "none")
-    setDisplay("label-dealer",     "none")
-    setDisplay("label-player",     "none")
+    setDisplay("betting-controls",   "flex")
+    setDisplay("controls-bj",        "none")
+    setDisplay("insurance-controls", "none")
+    setDisplay("label-dealer",       "none")
+    setDisplay("label-player",       "none")
     el("dealer-score").textContent = ""
     el("player-score").textContent = ""
     el("result-msg").textContent   = ""
 
   def showGamePhase(): Unit =
-    setDisplay("betting-controls", "none")
-    setDisplay("controls-bj",      "flex")
-    setDisplay("label-dealer",     "block")
-    setDisplay("label-player",     "block")
+    setDisplay("betting-controls",   "none")
+    setDisplay("controls-bj",        "flex")
+    setDisplay("insurance-controls", "none")
+    setDisplay("label-dealer",       "block")
+    setDisplay("label-player",       "block")
+
+  def showInsurancePhase(): Unit =
+    setDisplay("betting-controls",   "none")
+    setDisplay("controls-bj",        "none")
+    setDisplay("insurance-controls", "flex")
+    setDisplay("label-dealer",       "block")
+    setDisplay("label-player",       "block")
+    el("result-msg").textContent = ""
+
+  def playerScoreText: String =
+    val hs = rs.game.hands
+    if hs.length > 1 then
+      if rs.game.phase == GamePhase.PlayerTurn then
+        s"Main ${rs.game.active + 1}/${hs.length}: ${handValue(rs.game.activeHand.cards)}"
+      else
+        "Joueur: " + hs.map(h => handValue(h.cards)).mkString(" / ")
+    else
+      s"Joueur: ${handValue(hs.head.cards)}"
 
   def updateScores(): Unit =
     el("balance-display").textContent = s"${rs.game.balance}€"
-    el("bet-display").textContent     = s"Mise: ${rs.game.bet}€"
+    el("bet-display").textContent     = s"Mise: ${rs.game.stake}€"
     rs.game.phase match
-      case GamePhase.Betting    => ()
-      case GamePhase.PlayerTurn =>
-        el("player-score").textContent = s"Joueur: ${handValue(rs.game.playerHand)}"
+      case GamePhase.Betting =>
+        ()
+      case GamePhase.Insurance | GamePhase.PlayerTurn =>
+        el("player-score").textContent = playerScoreText
         el("dealer-score").textContent = "Dealer: ?"
-      case _ =>
-        el("player-score").textContent = s"Joueur: ${handValue(rs.game.playerHand)}"
+      case GamePhase.Resolved =>
+        el("player-score").textContent = playerScoreText
         el("dealer-score").textContent = s"Dealer: ${handValue(rs.game.dealerHand)}"
+
+  def outcomeIcon(o: Outcome): String = o match
+    case Outcome.PlayerWins | Outcome.DealerBusts => "🎉"
+    case Outcome.PlayerBlackjack                  => "🃏"
+    case Outcome.PlayerBusts                      => "💥"
+    case Outcome.DealerWins                       => "😞"
+    case Outcome.Push                             => "🤝"
+    case Outcome.Surrender                        => "🏳️"
 
   def handleResolution(): Unit =
     showGamePhase()
     setButtons(false, false)
-    val originalBet       = rs.game.bet
+    val stakeBefore       = rs.game.stake
+    val hadInsurance      = rs.game.insurance > 0
+    val multi             = rs.game.hands.length > 1
     val (newGame, payout) = collectWinnings.run(rs.game).value
     update(_.copy(game = newGame))
-    val gainStr = if payout - originalBet > 0 then s" +${payout - originalBet}€" else ""
-    val msg = rs.game.phase match
-      case GamePhase.Resolved(Outcome.PlayerWins)      => s"🎉 Vous gagnez !$gainStr"
-      case GamePhase.Resolved(Outcome.PlayerBlackjack) => s"🃏 Blackjack !$gainStr"
-      case GamePhase.Resolved(Outcome.DealerWins)      => "😞 Dealer gagne"
-      case GamePhase.Resolved(Outcome.PlayerBusts)     => "💥 Bust !"
-      case GamePhase.Resolved(Outcome.DealerBusts)     => s"🎉 Dealer bust !$gainStr"
-      case GamePhase.Resolved(Outcome.Push)            => "🤝 Égalité"
-      case _                                           => ""
+    val net    = payout - stakeBefore
+    val netStr = if net > 0 then s"+$net€" else if net < 0 then s"$net€" else "±0€"
+    val msg =
+      if multi || hadInsurance then
+        val icons = rs.game.hands.map(h => outcomeIcon(h.outcome.get)).mkString(" ")
+        s"$icons  $netStr"
+      else
+        val gainStr = if net > 0 then s" +$net€" else ""
+        rs.game.hands.head.outcome.get match
+          case Outcome.PlayerWins      => s"🎉 Vous gagnez !$gainStr"
+          case Outcome.PlayerBlackjack => s"🃏 Blackjack !$gainStr"
+          case Outcome.DealerWins      => "😞 Dealer gagne"
+          case Outcome.PlayerBusts     => "💥 Bust !"
+          case Outcome.DealerBusts     => s"🎉 Dealer bust !$gainStr"
+          case Outcome.Push            => "🤝 Égalité"
+          case Outcome.Surrender       => "🏳️ Abandon"
     el("result-msg").textContent = msg
     updateScores()
 
   def updateUI(): Unit =
     updateScores()
-    val broke = rs.game.balance == 0 && rs.game.bet == 0
+    val broke = rs.game.balance == 0 && rs.game.stake == 0
     setDisplay("btn-reset-credit", if broke then "block" else "none")
     rs.game.phase match
       case GamePhase.Betting =>
@@ -204,13 +268,35 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
           document.getElementById(s"chip-$d").asInstanceOf[dom.html.Button].disabled =
             rs.game.balance < d || rs.game.bet + d > MAX_BET
         }
+      case GamePhase.Insurance =>
+        showInsurancePhase()
+        btn("btn-insure-yes").disabled = rs.game.balance < rs.game.bet / 2
       case GamePhase.PlayerTurn =>
         showGamePhase()
-        setButtons(true, true, rs.game.playerHand.length == 2 && rs.game.balance >= rs.game.bet)
-      case GamePhase.DealerTurn =>
-        showGamePhase(); setButtons(false, false)
-      case GamePhase.Resolved(_) =>
+        val h          = rs.game.activeHand
+        val canDouble  = h.cards.length == 2 && rs.game.balance >= h.bet
+        val canSplitNow = canSplit(h.cards) && rs.game.balance >= h.bet && rs.game.hands.length < MAX_HANDS
+        val canSurr    = rs.game.hands.length == 1 && h.cards.length == 2
+        setButtons(true, true, canDouble, canSplitNow, canSurr)
+      case GamePhase.Resolved =>
         handleResolution()
+
+  // Run an action that may end the round: reveal the dealer if so, else refresh.
+  def revealAndResolve(): Unit =
+    rs.holeCard match
+      case hc if !js.isUndefined(hc) =>
+        animateFlip(hc.asInstanceOf[Mesh], () =>
+          update(dealerReveal)
+          updateUI()
+        )
+      case _ =>
+        update(dealerReveal)
+        updateUI()
+
+  def afterAction(): Unit =
+    rs.game.phase match
+      case GamePhase.Resolved => revealAndResolve()
+      case _                  => updateUI()
 
   // Apply chip canvas textures to HTML buttons
   List(5, 25, 50, 100).foreach { denom =>
@@ -224,7 +310,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   }
   updateUI()
 
-  // Raycaster drag
+  // Raycaster interaction
   val raycaster = new Raycaster()
   val mouse     = new Vector2()
 
@@ -232,66 +318,54 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     mouse.x =  (e.clientX.toDouble / dom.window.innerWidth)  * 2 - 1
     mouse.y = -(e.clientY.toDouble / dom.window.innerHeight) * 2 + 1
     raycaster.setFromCamera(mouse, camera)
-    val hits = raycaster.intersectObjects((rs.cards ++ rs.chips).toJSArray)
+    val hits = raycaster.intersectObjects(rs.chips.toJSArray)
     if hits.length > 0 then
-      val hit = hits(0).`object`.asInstanceOf[Mesh]
-      if rs.chips.contains(hit) then
-        dragChips = true; dragMesh = js.undefined
-        update(_.copy(velX = 0.0, velY = 0.0))
-      else
-        dragChips = false; dragMesh = hit
-      lastX = e.clientX; lastY = e.clientY
+      chipsSpread = !chipsSpread
+      animateChipSpread(rs.chips, chipsSpread)
   )
 
   canvas.addEventListener("mousemove", (e: dom.MouseEvent) =>
-    val dx = e.clientX - lastX
-    val dy = e.clientY - lastY
-    if dragChips && rs.chips.nonEmpty then
-      val rx = dy * 0.012; val ry = dx * 0.012
-      update { s =>
-        val nx = (s.rotX + rx).max(-0.4).min(0.4)
-        val ny = (s.rotY + ry).max(-0.4).min(0.4)
-        s.chips.foreach { m =>
-          m.rotation.x = Pi / 2 + nx
-          m.rotation.y = ny
-        }
-        s.copy(rotX = nx, rotY = ny, velX = rx, velY = ry)
-      }
-      lastX = e.clientX; lastY = e.clientY
-    else
-      dragMesh.foreach { m =>
-        m.rotation.y += dx * 0.012
-        m.rotation.x += dy * 0.012
-        lastX = e.clientX; lastY = e.clientY
-      }
-  )
+    mouse.x =  (e.clientX.toDouble / dom.window.innerWidth)  * 2 - 1
+    mouse.y = -(e.clientY.toDouble / dom.window.innerHeight) * 2 + 1
+    raycaster.setFromCamera(mouse, camera)
+    
+    val hits = raycaster.intersectObjects((rs.playerCards ++ rs.dealerCards).toJSArray)
+    val hitMesh = if hits.length > 0 then Some(hits(0).`object`.asInstanceOf[Mesh]) else None
 
-  canvas.addEventListener("mouseup", (_: dom.Event) =>
-    if dragChips && rs.chips.nonEmpty then
-      Animator.add { () =>
-        if rs.chips.isEmpty then false
-        else
-          val vx = rs.velX * 0.88; val vy = rs.velY * 0.88
-          if math.abs(vx) > 0.0003 || math.abs(vy) > 0.0003 then
-            val nx = rs.rotX + vx; val ny = rs.rotY + vy
-            rs.chips.foreach { m =>
-              m.rotation.x = Pi / 2 + nx
-              m.rotation.y = ny
-            }
-            rs = rs.copy(rotX = nx, rotY = ny, velX = vx, velY = vy)
-            true
-          else
-            rs = rs.copy(velX = 0.0, velY = 0.0)
-            false
-      }
-    dragMesh = js.undefined; dragChips = false
+    var hoveredHandMeshes: List[Mesh] = Nil
+    var offset = 0
+    var foundPlayerHand = false
+    for hand <- rs.game.hands do
+      val n = hand.cards.length
+      val meshes = rs.playerCards.slice(offset, offset + n)
+      if hitMesh.exists(meshes.contains) then
+        hoveredHandMeshes = meshes
+        foundPlayerHand = true
+      offset += n
+      
+    if !foundPlayerHand && hitMesh.exists(rs.dealerCards.contains) then
+      hoveredHandMeshes = rs.dealerCards
+      
+    (rs.playerCards ++ rs.dealerCards).foreach { m =>
+      if hoveredHandMeshes.contains(m) then
+        val n = hoveredHandMeshes.length
+        val i = hoveredHandMeshes.indexOf(m)
+        val angle = (i - (n - 1) / 2.0) * -0.25
+        val xOffset = (i - (n - 1) / 2.0) * 0.8
+        targetRotations(m) = angle
+        targetXOffsets(m) = xOffset
+      else
+        targetRotations(m) = 0.0
+        targetXOffsets(m) = 0.0
+    }
   )
 
   btn("btn-reset-credit").addEventListener("click", (_: dom.Event) =>
     update { s =>
       val cleaned = clearChips(s)
-      cleaned.cards.foreach(m => scene.remove(m))
-      cleaned.copy(cards = Nil, holeCard = js.undefined, game = bettingState(1000).unsafeRun())
+      (cleaned.playerCards ++ cleaned.dealerCards).foreach(m => scene.remove(m))
+      cleaned.copy(playerCards = Nil, dealerCards = Nil, holeCard = js.undefined,
+                   game = bettingState(1000).unsafeRun())
     }
     updateUI()
   )
@@ -317,37 +391,15 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     if rs.game.phase == GamePhase.Betting && rs.game.bet > 0 then
       val (newGame, _) = dealInitialCards.run(rs.game).value
       update(s => deal(s.copy(game = newGame)))
-      updateUI()
+      afterAction()
   )
 
   btn("btn-hit").addEventListener("click", (_: dom.Event) =>
     rs.game.phase match
       case GamePhase.PlayerTurn =>
         val (newGame, _) = playerHit.run(rs.game).value
-        update(s => hit(newGame.playerHand.last)(s.copy(game = newGame)))
-        updateUI()
-      case _ => ()
-  )
-
-  btn("btn-double").addEventListener("click", (_: dom.Event) =>
-    rs.game.phase match
-      case GamePhase.PlayerTurn if rs.game.playerHand.length == 2 && rs.game.balance >= rs.game.bet =>
-        setButtons(false, false)
-        val originalBet    = rs.game.bet
-        val (newGame, _)   = doubleDown.run(rs.game).value
-        update(s => hit(newGame.playerHand.last)(addChipsForAmount(originalBet)(s).copy(game = newGame)))
-        rs.game.phase match
-          case GamePhase.Resolved(Outcome.PlayerBusts) => updateUI()
-          case _ =>
-            rs.holeCard match
-              case hc if !js.isUndefined(hc) =>
-                animateFlip(hc.asInstanceOf[Mesh], () =>
-                  update(dealerReveal)
-                  updateUI()
-                )
-              case _ =>
-                update(dealerReveal)
-                updateUI()
+        update(s => renderPlayer(s.copy(game = newGame)))
+        afterAction()
       case _ => ()
   )
 
@@ -355,18 +407,60 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     rs.game.phase match
       case GamePhase.PlayerTurn =>
         setButtons(false, false)
-        rs.holeCard match
-          case hc if !js.isUndefined(hc) =>
-            animateFlip(hc.asInstanceOf[Mesh], () =>
-              val (newGame, _) = playerStand.run(rs.game).value
-              update(s => dealerReveal(s.copy(game = newGame)))
-              updateUI()
-            )
-          case _ =>
-            val (newGame, _) = playerStand.run(rs.game).value
-            update(s => dealerReveal(s.copy(game = newGame)))
-            updateUI()
+        val (newGame, _) = playerStand.run(rs.game).value
+        update(s => renderPlayer(s.copy(game = newGame)))
+        afterAction()
       case _ => ()
+  )
+
+  btn("btn-double").addEventListener("click", (_: dom.Event) =>
+    rs.game.phase match
+      case GamePhase.PlayerTurn
+        if rs.game.activeHand.cards.length == 2 && rs.game.balance >= rs.game.activeHand.bet =>
+        setButtons(false, false)
+        val extra        = rs.game.activeHand.bet
+        val (newGame, _) = doubleDown.run(rs.game).value
+        update(s => renderPlayer(addChipsForAmount(extra)(s).copy(game = newGame)))
+        afterAction()
+      case _ => ()
+  )
+
+  btn("btn-split").addEventListener("click", (_: dom.Event) =>
+    rs.game.phase match
+      case GamePhase.PlayerTurn
+        if canSplit(rs.game.activeHand.cards) && rs.game.balance >= rs.game.activeHand.bet
+           && rs.game.hands.length < MAX_HANDS =>
+        val extra        = rs.game.activeHand.bet
+        val (newGame, _) = split.run(rs.game).value
+        update(s => renderPlayer(addChipsForAmount(extra)(s).copy(game = newGame)))
+        afterAction()
+      case _ => ()
+  )
+
+  btn("btn-surrender").addEventListener("click", (_: dom.Event) =>
+    rs.game.phase match
+      case GamePhase.PlayerTurn
+        if rs.game.hands.length == 1 && rs.game.activeHand.cards.length == 2 =>
+        setButtons(false, false)
+        val (newGame, _) = surrender.run(rs.game).value
+        update(s => renderPlayer(s.copy(game = newGame)))
+        afterAction()
+      case _ => ()
+  )
+
+  btn("btn-insure-yes").addEventListener("click", (_: dom.Event) =>
+    if rs.game.phase == GamePhase.Insurance then
+      val ins          = rs.game.bet / 2
+      val (newGame, _) = takeInsurance.run(rs.game).value
+      update(s => addChipsForAmount(ins)(s).copy(game = newGame))
+      afterAction()
+  )
+
+  btn("btn-insure-no").addEventListener("click", (_: dom.Event) =>
+    if rs.game.phase == GamePhase.Insurance then
+      val (newGame, _) = declineInsurance.run(rs.game).value
+      update(_.copy(game = newGame))
+      afterAction()
   )
 
   btn("btn-new").addEventListener("click", (_: dom.Event) =>
