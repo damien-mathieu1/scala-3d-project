@@ -13,10 +13,10 @@ import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 import scala.math.Pi
 
-private val PLAYER_ROW = -1.2
-private val DEALER_ROW =  1.2
+private val PLAYER_ROW = -0.4
+private val DEALER_ROW =  1.8
 private val ROW_GAP    =  1.2
-private val CHIP_ROW   = -2.5
+private val CHIP_ROW   = -1.6
 
 private case class RenderState(
   game:     GameState,
@@ -104,15 +104,11 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     }
 
   def addChip(denomination: Int): RenderState => RenderState = s =>
-    val n     = s.chips.length + 1
-    val scale = (1.0 / math.sqrt(n.toDouble)).max(0.35)
-    val z     = s.chips.length.toDouble * 0.015
-    val mesh  = makeChipMesh(denomination)
+    val z    = s.chips.length.toDouble * CHIP_THICKNESS
+    val mesh = makeChipMesh(denomination)
     mesh.position.set(0.0, CHIP_ROW, z)
     mesh.rotation.asInstanceOf[js.Dynamic].x = Pi / 2 + s.rotX
     mesh.rotation.asInstanceOf[js.Dynamic].y = s.rotY
-    mesh.scale.set(scale, scale, scale)
-    s.chips.foreach(_.scale.set(scale, scale, scale))
     scene.add(mesh)
     s.copy(chips = s.chips :+ mesh)
 
@@ -194,6 +190,10 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
       case GamePhase.Betting =>
         showBettingPhase()
         btn("btn-deal").disabled = rs.game.bet == 0
+        List(5, 25, 50, 100).foreach { d =>
+          document.getElementById(s"chip-$d").asInstanceOf[dom.html.Button].disabled =
+            rs.game.balance < d || rs.game.bet + d > MAX_BET
+        }
       case GamePhase.PlayerTurn =>
         showGamePhase()
         setButtons(true, true, rs.game.playerHand.length == 2 && rs.game.balance >= rs.game.bet)
