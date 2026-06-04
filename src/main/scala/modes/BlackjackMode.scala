@@ -22,6 +22,14 @@ private case class CameraSetup(px: Double, py: Double, pz: Double,
                                 lx: Double, ly: Double, lz: Double)
 private val casinoView = CameraSetup(0, -2.0, 6.5, 0, 0.3, 0)
 
+private case class TableConfig(id: String, label: String, minBet: Int, maxBet: Int, chips: List[Int])
+private val tables: List[TableConfig] = List(
+  TableConfig("bronze", "Bronze",  1,   200,  List(1, 2, 5, 25, 50, 100)),
+  TableConfig("silver", "Silver",  5,   400,  List(5, 25, 50, 100)),
+  TableConfig("gold",   "Gold",    50,  2000, List(25, 50, 100, 200)),
+  TableConfig("vip",    "VIP",     100, 5000, List(50, 100, 200, 500))
+)
+
 private def applyCamera(cam: PerspectiveCamera, s: CameraSetup): Unit =
   cam.position.set(s.px, s.py, s.pz)
   cam.lookAt(s.lx, s.ly, s.lz)
@@ -47,7 +55,9 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   var rs: RenderState = RenderState(bettingState().unsafeRun())
   def update(f: RenderState => RenderState): Unit = rs = f(rs)
 
-  // Drag state — boundary vars for mouse interaction only
+  var tableConfig: TableConfig = tables.head
+  var tableChosen: Boolean     = false
+
   var dragMesh:  js.UndefOr[Mesh] = js.undefined
   var dragChips: Boolean           = false
   var lastX = 0.0; var lastY = 0.0
@@ -133,7 +143,8 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   def newRound: RenderState => RenderState = s =>
     val cleaned = clearChips(s)
     cleaned.cards.foreach(m => scene.remove(m))
-    cleaned.copy(cards = Nil, holeCard = js.undefined, game = bettingState(s.game.balance).unsafeRun())
+    cleaned.copy(cards = Nil, holeCard = js.undefined,
+      game = bettingState(s.game.balance, s.game.minBet, s.game.maxBet).unsafeRun())
 
   // UI helpers
 
@@ -148,7 +159,8 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     btn("btn-double").disabled = !d
 
   def showBettingPhase(): Unit =
-    setDisplay("betting-controls", "flex")
+    setDisplay("table-select",     if tableChosen then "none" else "flex")
+    setDisplay("betting-controls", if tableChosen then "flex" else "none")
     setDisplay("controls-bj",      "none")
     setDisplay("label-dealer",     "none")
     setDisplay("label-player",     "none")
@@ -199,10 +211,10 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     rs.game.phase match
       case GamePhase.Betting =>
         showBettingPhase()
-        btn("btn-deal").disabled = rs.game.bet == 0
-        List(5, 25, 50, 100).foreach { d =>
+        btn("btn-deal").disabled = rs.game.bet < rs.game.minBet
+        tableConfig.chips.foreach { d =>
           document.getElementById(s"chip-$d").asInstanceOf[dom.html.Button].disabled =
-            rs.game.balance < d || rs.game.bet + d > MAX_BET
+            rs.game.balance < d || rs.game.bet + d > rs.game.maxBet
         }
       case GamePhase.PlayerTurn =>
         showGamePhase()
@@ -213,14 +225,17 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
         handleResolution()
 
   // Apply chip canvas textures to HTML buttons
-  List(5, 25, 50, 100).foreach { denom =>
-    val b   = document.getElementById(s"chip-$denom").asInstanceOf[dom.html.Element]
-    val url = makeChipCanvas(denom).toDataURL("image/png")
-    b.style.backgroundImage   = s"url($url)"
-    b.style.backgroundSize    = "cover"
-    b.style.backgroundColor   = "transparent"
-    b.style.border            = "none"
-    b.textContent             = ""
+  List(1, 2, 5, 25, 50, 100, 200, 500).foreach { denom =>
+    val b = document.getElementById(s"chip-$denom")
+    if b != null then
+      val el  = b.asInstanceOf[dom.html.Element]
+      val url = makeChipCanvas(denom).toDataURL("image/png")
+      el.style.backgroundImage   = s"url($url)"
+      el.style.backgroundSize    = "cover"
+      el.style.backgroundColor   = "transparent"
+      el.style.border            = "none"
+      el.textContent             = ""
+      el.style.display           = "none"
   }
   updateUI()
 
@@ -288,6 +303,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   )
 
   btn("btn-reset-credit").addEventListener("click", (_: dom.Event) =>
+    tableChosen = false
     update { s =>
       val cleaned = clearChips(s)
       cleaned.cards.foreach(m => scene.remove(m))
@@ -296,14 +312,32 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     updateUI()
   )
 
-  // Chip buttons
-  List(5, 25, 50, 100).foreach { denom =>
-    document.getElementById(s"chip-$denom").addEventListener("click", (_: dom.Event) =>
-      if rs.game.phase == GamePhase.Betting && rs.game.balance >= denom then
-        val (newGame, _) = placeBet(denom).run(rs.game).value
-        update(s => addChip(denom)(s.copy(game = newGame)))
-        updateUI()
+  // Table selection
+  tables.foreach { t =>
+    document.getElementById(s"table-${t.id}").addEventListener("click", (_: dom.Event) =>
+      tableConfig = t
+      tableChosen = true
+      update(s => s.copy(game = bettingState(rs.game.balance, t.minBet, t.maxBet).unsafeRun()))
+      List(1, 2, 5, 25, 50, 100, 200, 500).foreach { d =>
+        val el = document.getElementById(s"chip-$d")
+        if el != null then
+          el.asInstanceOf[dom.html.Element].style.display =
+            if t.chips.contains(d) then "inline-flex" else "none"
+      }
+      updateUI()
     )
+  }
+
+  // Chip buttons
+  List(1, 2, 5, 25, 50, 100, 200, 500).foreach { denom =>
+    val el = document.getElementById(s"chip-$denom")
+    if el != null then
+      el.addEventListener("click", (_: dom.Event) =>
+        if rs.game.phase == GamePhase.Betting && rs.game.balance >= denom then
+          val (newGame, _) = placeBet(denom).run(rs.game).value
+          update(s => addChip(denom)(s.copy(game = newGame)))
+          updateUI()
+      )
   }
 
   btn("btn-clear-bet").addEventListener("click", (_: dom.Event) =>
@@ -314,7 +348,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   )
 
   btn("btn-deal").addEventListener("click", (_: dom.Event) =>
-    if rs.game.phase == GamePhase.Betting && rs.game.bet > 0 then
+    if rs.game.phase == GamePhase.Betting && rs.game.bet >= rs.game.minBet then
       val (newGame, _) = dealInitialCards.run(rs.game).value
       update(s => deal(s.copy(game = newGame)))
       updateUI()

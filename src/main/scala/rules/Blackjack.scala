@@ -12,11 +12,9 @@ val drawCard: GameAction[Card] = State { s =>
   (s.copy(deck = rest), card)
 }
 
-val MAX_BET = 400
-
 def placeBet(amount: Int): GameAction[Unit] =
   State.modify { s =>
-    if amount > 0 && amount <= s.balance && s.bet + amount <= MAX_BET
+    if amount > 0 && amount <= s.balance && s.bet + amount <= s.maxBet
     then s.copy(balance = s.balance - amount, bet = s.bet + amount)
     else s
   }

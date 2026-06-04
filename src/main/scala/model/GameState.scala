@@ -15,5 +15,7 @@ case class GameState(
   dealerHand: Hand,
   phase:      GamePhase,
   balance:    Int,
-  bet:        Int
+  bet:        Int,
+  minBet:     Int = 1,
+  maxBet:     Int = 400
 )

@@ -95,6 +95,49 @@
     #btn-deal      { background: #d4af37; color: #111111; }
     #btn-clear-bet { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.3); }
 
+    /* ── SÉLECTION DE TABLE ──────────────────────────────────────────── */
+    #table-select {
+      position: fixed; inset: 0; z-index: 25;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      gap: 24px; background: rgba(0,0,0,0.72); backdrop-filter: blur(6px);
+    }
+    #table-select h2 {
+      font-size: 28px; letter-spacing: 3px; text-transform: uppercase;
+      color: rgba(255,255,255,0.9); text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+    }
+    #table-grid { display: flex; gap: 16px; }
+    .table-card {
+      width: 140px; padding: 22px 14px 18px; border-radius: 16px; cursor: pointer;
+      text-align: center; transition: all 0.2s;
+      border: 2px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.07);
+    }
+    .table-card:hover { transform: translateY(-6px) scale(1.04); border-color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.14); }
+    .roulette {
+      width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 14px;
+      border: 3px solid rgba(255,255,255,0.25);
+      position: relative; overflow: hidden;
+      background: conic-gradient(
+        #cc2222 0deg 45deg, #1a1a1a 45deg 90deg,
+        #cc2222 90deg 135deg, #1a1a1a 135deg 180deg,
+        #cc2222 180deg 225deg, #1a1a1a 225deg 270deg,
+        #cc2222 270deg 315deg, #1a8b1a 315deg 360deg
+      );
+      animation: spin 8s linear infinite;
+    }
+    .roulette::after {
+      content: ''; position: absolute; inset: 22%; border-radius: 50%;
+      background: rgba(0,0,0,0.75); border: 2px solid rgba(255,255,255,0.2);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .table-card .t-name { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+    .table-card .t-min  { font-size: 13px; color: #d4af37; font-weight: bold; }
+    .table-card .t-max  { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 4px; }
+    #table-bronze .t-name { color: #cd7f32; }
+    #table-silver .t-name { color: #c0c0c0; }
+    #table-gold   .t-name { color: #d4af37; }
+    #table-vip    .t-name { color: #9b59b6; }
+
     /* ── BOUTONS JEU (phase partie) ───────────────────────────────────── */
     #controls-bj {
       position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
@@ -176,13 +219,48 @@
     <div id="label-dealer">Dealer</div>
     <div id="label-player">Joueur</div>
 
+    <!-- Sélection de table -->
+    <div id="table-select">
+      <h2>Choisissez votre table</h2>
+      <div id="table-grid">
+        <div class="table-card" id="table-bronze">
+          <div class="roulette"></div>
+          <div class="t-name">Bronze</div>
+          <div class="t-min">Min: 1&#x20AC;</div>
+          <div class="t-max">Max: 200&#x20AC;</div>
+        </div>
+        <div class="table-card" id="table-silver">
+          <div class="roulette"></div>
+          <div class="t-name">Silver</div>
+          <div class="t-min">Min: 5&#x20AC;</div>
+          <div class="t-max">Max: 400&#x20AC;</div>
+        </div>
+        <div class="table-card" id="table-gold">
+          <div class="roulette"></div>
+          <div class="t-name">Gold</div>
+          <div class="t-min">Min: 50&#x20AC;</div>
+          <div class="t-max">Max: 2000&#x20AC;</div>
+        </div>
+        <div class="table-card" id="table-vip">
+          <div class="roulette"></div>
+          <div class="t-name">VIP</div>
+          <div class="t-min">Min: 100&#x20AC;</div>
+          <div class="t-max">Max: 5000&#x20AC;</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Controles phase mise -->
     <div id="betting-controls">
       <div id="chip-row">
+        <button class="chip-btn" id="chip-1">1</button>
+        <button class="chip-btn" id="chip-2">2</button>
         <button class="chip-btn" id="chip-5">5</button>
         <button class="chip-btn" id="chip-25">25</button>
         <button class="chip-btn" id="chip-50">50</button>
         <button class="chip-btn" id="chip-100">100</button>
+        <button class="chip-btn" id="chip-200">200</button>
+        <button class="chip-btn" id="chip-500">500</button>
       </div>
       <div id="deal-row">
         <button id="btn-clear-bet">Annuler</button>
