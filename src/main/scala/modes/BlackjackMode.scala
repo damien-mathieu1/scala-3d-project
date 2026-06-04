@@ -13,10 +13,20 @@ import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 import scala.math.Pi
 
-private val PLAYER_ROW = -0.4
-private val DEALER_ROW =  1.8
+private val PLAYER_ROW =  0.3
+private val DEALER_ROW =  2.2
 private val ROW_GAP    =  1.2
-private val CHIP_ROW   = -1.6
+private val CHIP_ROW   = -1.8
+
+private case class CameraSetup(px: Double, py: Double, pz: Double,
+                                lx: Double, ly: Double, lz: Double)
+private val casinoView = CameraSetup(0, -2.0, 6.5, 0, 0.3, 0)
+
+private def applyCamera(cam: PerspectiveCamera, s: CameraSetup): Unit =
+  cam.position.set(s.px, s.py, s.pz)
+  cam.lookAt(s.lx, s.ly, s.lz)
+  cam.aspect = dom.window.innerWidth.toDouble / dom.window.innerHeight.toDouble
+  cam.updateProjectionMatrix()
 
 private case class RenderState(
   game:     GameState,
@@ -32,10 +42,7 @@ private case class RenderState(
 def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Canvas): Unit =
   scene.clear()
   scene.background = new ThreeColor(0x0d1f0d).asInstanceOf[js.Any]
-  camera.position.set(0, 0, 7)
-  camera.lookAt(0, 0, 0)
-  camera.aspect = dom.window.innerWidth.toDouble / dom.window.innerHeight.toDouble
-  camera.updateProjectionMatrix()
+  applyCamera(camera, casinoView)
 
   var rs: RenderState = RenderState(bettingState().unsafeRun())
   def update(f: RenderState => RenderState): Unit = rs = f(rs)
@@ -104,11 +111,12 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     }
 
   def addChip(denomination: Int): RenderState => RenderState = s =>
-    val z    = s.chips.length.toDouble * CHIP_THICKNESS
+    val n    = s.chips.length.toDouble
+    val y    = CHIP_ROW + n * 0.07
+    val z    = n * 0.001
     val mesh = makeChipMesh(denomination)
-    mesh.position.set(0.0, CHIP_ROW, z)
-    mesh.rotation.asInstanceOf[js.Dynamic].x = Pi / 2 + s.rotX
-    mesh.rotation.asInstanceOf[js.Dynamic].y = s.rotY
+    mesh.position.set(0.0, y, z)
+    mesh.rotation.asInstanceOf[js.Dynamic].set(Pi / 2 + s.rotX, s.rotY, 0.0)
     scene.add(mesh)
     s.copy(chips = s.chips :+ mesh)
 
@@ -186,6 +194,8 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
 
   def updateUI(): Unit =
     updateScores()
+    val broke = rs.game.balance == 0 && rs.game.bet == 0
+    setDisplay("btn-reset-credit", if broke then "block" else "none")
     rs.game.phase match
       case GamePhase.Betting =>
         showBettingPhase()
@@ -239,10 +249,11 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     if dragChips && rs.chips.nonEmpty then
       val rx = dy * 0.012; val ry = dx * 0.012
       update { s =>
-        val nx = s.rotX + rx; val ny = s.rotY + ry
+        val nx = (s.rotX + rx).max(-0.4).min(0.4)
+        val ny = (s.rotY + ry).max(-0.4).min(0.4)
         s.chips.foreach { m =>
-          m.rotation.asInstanceOf[js.Dynamic].x = Pi / 2 + nx
-          m.rotation.asInstanceOf[js.Dynamic].y = ny
+          m.rotation.x = Pi / 2 + nx
+          m.rotation.y = ny
         }
         s.copy(rotX = nx, rotY = ny, velX = rx, velY = ry)
       }
@@ -264,8 +275,8 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
           if math.abs(vx) > 0.0003 || math.abs(vy) > 0.0003 then
             val nx = rs.rotX + vx; val ny = rs.rotY + vy
             rs.chips.foreach { m =>
-              m.rotation.asInstanceOf[js.Dynamic].x = Pi / 2 + nx
-              m.rotation.asInstanceOf[js.Dynamic].y = ny
+              m.rotation.x = Pi / 2 + nx
+              m.rotation.y = ny
             }
             rs = rs.copy(rotX = nx, rotY = ny, velX = vx, velY = vy)
             true
@@ -274,6 +285,15 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
             false
       }
     dragMesh = js.undefined; dragChips = false
+  )
+
+  btn("btn-reset-credit").addEventListener("click", (_: dom.Event) =>
+    update { s =>
+      val cleaned = clearChips(s)
+      cleaned.cards.foreach(m => scene.remove(m))
+      cleaned.copy(cards = Nil, holeCard = js.undefined, game = bettingState(1000).unsafeRun())
+    }
+    updateUI()
   )
 
   // Chip buttons

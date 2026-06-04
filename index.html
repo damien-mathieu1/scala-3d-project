@@ -103,7 +103,14 @@
     #btn-hit    { background: #2ecc71; color: white; }
     #btn-stand  { background: #e74c3c; color: white; }
     #btn-double { background: #e6a817; color: #111; }
-    #btn-new    { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+    #btn-new          { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+    #btn-reset-credit {
+      position: fixed; top: 16px; right: 16px; z-index: 30;
+      background: #e74c3c; color: white; display: none;
+      padding: 10px 20px; border-radius: 8px; border: none;
+      font-size: 14px; font-weight: bold; cursor: pointer;
+    }
+    #btn-reset-credit:hover { filter: brightness(1.2); }
 
     /* ── SHARED BUTTON STYLES ─────────────────────────────────────────── */
     button {
@@ -155,6 +162,7 @@
   <!-- ── BLACKJACK ── -->
   <div id="panel-blackjack">
     <button class="back-btn" id="back-from-blackjack" style="display:block">&#x2190; Menu</button>
+    <button id="btn-reset-credit">&#x1F4B0; Reset cr&#xe9;dit</button>
 
     <!-- Scores toujours visibles -->
     <div id="scores">
@@ -204,6 +212,6 @@
     <p id="hint">Clic + glisser pour tourner &middot; Molette pour zoomer &middot; Clic droit pour d&#xe9;placer</p>
   </div>
 
-  <script src="./image3d-fastopt-bundle.js?v=35"></script>
+  <script src="./image3d-fastopt-bundle.js?v=51"></script>
 </body>
 </html>

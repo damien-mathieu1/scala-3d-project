@@ -14,7 +14,7 @@ private def now(): Double = dom.window.performance.now()
 
 def animateSlide(mesh: Mesh, targetX: Double, delay: Double = 0): Unit =
   val duration = 450.0
-  val startX   = targetX + 10.0
+  val startX   = targetX + 4.0
   mesh.position.x = startX
   val t0 = now()
   Animator.add(() =>
