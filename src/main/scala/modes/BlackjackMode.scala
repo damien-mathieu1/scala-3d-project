@@ -119,10 +119,13 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     s.copy(playerCards = pMeshes, dealerCards = List(up, hc), holeCard = hc)
 
   // Redraw every player hand from state (split-aware); active hand sits forward.
-  def renderPlayer: RenderState => RenderState = s =>
+  // Cards listed in `fresh` (hand index, card index) are dealt in from the shoe;
+  // the rest are placed instantly so existing cards don't re-fly on every draw.
+  def renderPlayer(fresh: Set[(Int, Int)] = Set.empty): RenderState => RenderState = s =>
     s.playerCards.foreach(m => scene.remove(m))
     val hs = s.game.hands
     val H  = hs.length
+    var drawOrder = 0
     val meshes = hs.zipWithIndex.flatMap { (hand, hi) =>
       val center   = clusterCenter(H, hi)
       val n        = hand.cards.length
@@ -132,6 +135,9 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
         val x = cardX(center, n, ci)
         val m = makeCardMesh(card)
         m.position.set(x, y, ci * 0.01); scene.add(m)
+        if fresh.contains((hi, ci)) then
+          animateSlide(m, x, y, DECK_X, DECK_Y, drawOrder * 150.0)
+          drawOrder += 1
         m
       }
     }
@@ -450,8 +456,10 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   btn("btn-hit").addEventListener("click", (_: dom.Event) =>
     rs.game.phase match
       case GamePhase.PlayerTurn =>
+        val hi           = rs.game.active
         val (newGame, _) = playerHit.run(rs.game).value
-        update(s => renderPlayer(s.copy(game = newGame)))
+        val ci           = newGame.hands(hi).cards.length - 1
+        update(s => renderPlayer(Set((hi, ci)))(s.copy(game = newGame)))
         afterAction()
       case _ => ()
   )
@@ -461,7 +469,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
       case GamePhase.PlayerTurn =>
         setButtons(false, false)
         val (newGame, _) = playerStand.run(rs.game).value
-        update(s => renderPlayer(s.copy(game = newGame)))
+        update(s => renderPlayer()(s.copy(game = newGame)))
         afterAction()
       case _ => ()
   )
@@ -471,9 +479,11 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
       case GamePhase.PlayerTurn
         if rs.game.activeHand.cards.length == 2 && rs.game.balance >= rs.game.activeHand.bet =>
         setButtons(false, false)
+        val hi           = rs.game.active
         val extra        = rs.game.activeHand.bet
         val (newGame, _) = doubleDown.run(rs.game).value
-        update(s => renderPlayer(addChipsForAmount(extra)(s).copy(game = newGame)))
+        val ci           = newGame.hands(hi).cards.length - 1
+        update(s => renderPlayer(Set((hi, ci)))(addChipsForAmount(extra)(s).copy(game = newGame)))
         afterAction()
       case _ => ()
   )
@@ -483,9 +493,11 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
       case GamePhase.PlayerTurn
         if canSplit(rs.game.activeHand.cards) && rs.game.balance >= rs.game.activeHand.bet
            && rs.game.hands.length < MAX_HANDS =>
+        val hi           = rs.game.active
         val extra        = rs.game.activeHand.bet
         val (newGame, _) = split.run(rs.game).value
-        update(s => renderPlayer(addChipsForAmount(extra)(s).copy(game = newGame)))
+        // both resulting hands receive a fresh second card from the shoe
+        update(s => renderPlayer(Set((hi, 1), (hi + 1, 1)))(addChipsForAmount(extra)(s).copy(game = newGame)))
         afterAction()
       case _ => ()
   )
@@ -496,7 +508,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
         if rs.game.hands.length == 1 && rs.game.activeHand.cards.length == 2 =>
         setButtons(false, false)
         val (newGame, _) = surrender.run(rs.game).value
-        update(s => renderPlayer(s.copy(game = newGame)))
+        update(s => renderPlayer()(s.copy(game = newGame)))
         afterAction()
       case _ => ()
   )
