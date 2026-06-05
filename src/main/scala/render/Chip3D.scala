@@ -11,10 +11,14 @@ val CHIP_THICKNESS = 0.10
 private val CHIP_SEGMENTS = 64
 
 private def chipHex(denomination: Int): Int = denomination match
+  case 1   => 0xe8e8e8
+  case 2   => 0xc0a0d0
   case 5   => 0xcc2222
   case 25  => 0x22aa44
   case 50  => 0x2255cc
   case 100 => 0x1a1a1a
+  case 200 => 0xd4701a
+  case 500 => 0x8800cc
   case _   => 0x888888
 
 private def cssHex(hex: Int): String = f"#$hex%06x"

@@ -25,7 +25,9 @@ case class GameState(
   phase:      GamePhase,
   balance:    Int,
   bet:        Int,        // working bet during the betting phase
-  insurance:  Int = 0     // insurance side bet
+  insurance:  Int = 0,    // insurance side bet
+  minBet:     Int = 1,
+  maxBet:     Int = 400
 ):
   def activeHand: PlayerHand   = hands(active)
   def stake:      Int          = if hands.isEmpty then bet else hands.map(_.bet).sum + insurance
