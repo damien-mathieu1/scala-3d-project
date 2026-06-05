@@ -2,20 +2,32 @@ package model
 
 enum GamePhase:
   case Betting
+  case Insurance   // dealer up-card is Ace: player may take insurance
   case PlayerTurn
-  case DealerTurn
-  case Resolved(outcome: Outcome)
+  case Resolved    // round over; per-hand results live in GameState.hands
 
 enum Outcome:
-  case PlayerWins, DealerWins, Push, PlayerBusts, DealerBusts, PlayerBlackjack
+  case PlayerWins, DealerWins, Push, PlayerBusts, DealerBusts, PlayerBlackjack, Surrender
+
+/** One player hand. After a split a round holds several. */
+case class PlayerHand(
+  cards:   Hand,
+  bet:     Int,
+  done:    Boolean         = false,
+  outcome: Option[Outcome] = None
+)
 
 case class GameState(
   deck:       List[Card],
-  playerHand: Hand,
+  hands:      List[PlayerHand],
+  active:     Int,
   dealerHand: Hand,
   phase:      GamePhase,
   balance:    Int,
-  bet:        Int,
+  bet:        Int,        // working bet during the betting phase
+  insurance:  Int = 0,    // insurance side bet
   minBet:     Int = 1,
   maxBet:     Int = 400
-)
+):
+  def activeHand: PlayerHand   = hands(active)
+  def stake:      Int          = if hands.isEmpty then bet else hands.map(_.bet).sum + insurance

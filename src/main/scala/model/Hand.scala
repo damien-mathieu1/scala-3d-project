@@ -17,3 +17,7 @@ object Hand:
   def isBust(hand: Hand): Boolean          = handValue(hand) > 21
   def isBlackjack(hand: Hand): Boolean     = hand.length == 2 && handValue(hand) == 21
   def dealerShouldHit(hand: Hand): Boolean = handValue(hand) < 17
+
+  // two starting cards of equal value (10/J/Q/K all count as 10)
+  def canSplit(hand: Hand): Boolean =
+    hand.length == 2 && cardValue(hand(0).rank) == cardValue(hand(1).rank)

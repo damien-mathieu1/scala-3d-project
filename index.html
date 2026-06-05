@@ -143,10 +143,21 @@
       position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
       display: none; gap: 12px; z-index: 10;
     }
-    #btn-hit    { background: #2ecc71; color: white; }
-    #btn-stand  { background: #e74c3c; color: white; }
-    #btn-double { background: #e6a817; color: #111; }
+    #btn-hit       { background: #2ecc71; color: white; }
+    #btn-stand     { background: #e74c3c; color: white; }
+    #btn-double    { background: #e6a817; color: #111; }
+    #btn-split     { background: #3498db; color: white; }
+    #btn-surrender { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
     #btn-new          { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); }
+
+    /* ── ASSURANCE ────────────────────────────────────────────────────── */
+    #insurance-controls {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      display: none; gap: 12px; align-items: center; z-index: 10;
+    }
+    #insurance-prompt { font-size: 16px; font-weight: bold; color: #ffd700; }
+    #btn-insure-yes { background: #2ecc71; color: white; }
+    #btn-insure-no  { background: #e74c3c; color: white; }
     #btn-reset-credit {
       position: fixed; top: 16px; right: 16px; z-index: 30;
       background: #e74c3c; color: white; display: none;
@@ -273,7 +284,16 @@
       <button id="btn-hit">Carte</button>
       <button id="btn-stand">Rester</button>
       <button id="btn-double" disabled>Doubler</button>
+      <button id="btn-split" disabled>S&#xe9;parer</button>
+      <button id="btn-surrender" disabled>Abandonner</button>
       <button id="btn-new">Nouvelle partie</button>
+    </div>
+
+    <!-- Controles assurance -->
+    <div id="insurance-controls">
+      <span id="insurance-prompt">Le croupier montre un As. Assurance&#xa0;?</span>
+      <button id="btn-insure-yes">Oui</button>
+      <button id="btn-insure-no">Non</button>
     </div>
   </div>
 
