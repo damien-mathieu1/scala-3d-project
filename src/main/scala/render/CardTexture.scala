@@ -88,3 +88,27 @@ val backTexture: CanvasTexture =
   ctx.strokeRect(12, 12, W - 24, H - 24)
 
   new CanvasTexture(canvas)
+
+// Edge of the shoe: stacked-paper look — many fine cream/grey lines.
+val deckEdgeTexture: CanvasTexture =
+  val canvas = document.createElement("canvas").asInstanceOf[dom.html.Canvas]
+  canvas.width  = 64
+  canvas.height = 256
+  val ctx = canvas.getContext("2d").asInstanceOf[js.Dynamic]
+
+  // Cream base
+  ctx.fillStyle = "#efe9d8"
+  ctx.fillRect(0, 0, 64, 256)
+
+  // Thin lines = individual card edges
+  var y = 0
+  while y < 256 do
+    ctx.strokeStyle = if (y / 3) % 2 == 0 then "rgba(150,140,110,0.55)" else "rgba(255,255,255,0.5)"
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(0, y + 0.5)
+    ctx.lineTo(64, y + 0.5)
+    ctx.stroke()
+    y += 3
+
+  new CanvasTexture(canvas)
