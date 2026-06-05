@@ -46,6 +46,13 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   scene.background = new ThreeColor(0x0d1f0d).asInstanceOf[js.Any]
   applyCamera(camera, casinoView)
 
+  val DECK_X = 3.5
+  val DECK_Y = 1.0
+  for i <- 0 to 4 do
+    val dm = makeHoleCardMesh(Card(Rank.Ace, Suit.Spades))
+    dm.position.set(DECK_X, DECK_Y, i * 0.01)
+    scene.add(dm)
+
   var rs: RenderState = RenderState(bettingState().unsafeRun())
   def update(f: RenderState => RenderState): Unit = rs = f(rs)
 
@@ -73,7 +80,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
   def clusterCenter(h: Int, i: Int): Double =
     if h <= 1 then 0.0 else -CLUSTER_SPAN / 2 + i * CLUSTER_SPAN / (h - 1)
   def cardX(center: Double, n: Int, j: Int): Double =
-    center + (j - (n - 1) / 2.0) * CARD_GAP
+    center - (CARD_GAP / 2.0) + j * CARD_GAP
 
   // Pure scene transitions: RenderState => RenderState
   // Three.js mutations are side effects at the boundary
@@ -87,15 +94,15 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
     val pMeshes = hand.zipWithIndex.map { (card, i) =>
       val x = cardX(0.0, pn, i)
       val m = makeCardMesh(card)
-      m.position.set(x, PLAYER_ROW, i * 0.01); scene.add(m); animateSlide(m, x, i * 150.0)
+      m.position.set(x, PLAYER_ROW, i * 0.01); scene.add(m); animateSlide(m, x, PLAYER_ROW, DECK_X, DECK_Y, i * 150.0)
       m
     }
     val up = makeCardMesh(dh(0))
     val ux = cardX(0.0, 2, 0)
-    up.position.set(ux, DEALER_ROW, 0.0); scene.add(up); animateSlide(up, ux, pn * 150.0)
+    up.position.set(ux, DEALER_ROW, 0.0); scene.add(up); animateSlide(up, ux, DEALER_ROW, DECK_X, DECK_Y, pn * 150.0)
     val hc = makeHoleCardMesh(dh(1))
     val hx = cardX(0.0, 2, 1)
-    hc.position.set(hx, DEALER_ROW, 0.01); scene.add(hc); animateSlide(hc, hx, (pn + 1) * 150.0)
+    hc.position.set(hx, DEALER_ROW, 0.01); scene.add(hc); animateSlide(hc, hx, DEALER_ROW, DECK_X, DECK_Y, (pn + 1) * 150.0)
     s.copy(playerCards = pMeshes, dealerCards = List(up, hc), holeCard = hc)
 
   // Redraw every player hand from state (split-aware); active hand sits forward.
@@ -126,7 +133,7 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
       val x = cardX(0.0, n, i)
       val m = makeCardMesh(card)
       m.position.set(x, DEALER_ROW, i * 0.01); scene.add(m)
-      if i >= 2 then animateSlide(m, x, (i - 2) * 200.0)
+      if i >= 2 then animateSlide(m, x, DEALER_ROW, DECK_X, DECK_Y, (i - 2) * 200.0)
       m
     }
     s.copy(dealerCards = meshes, holeCard = js.undefined)
@@ -281,6 +288,14 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
       case GamePhase.Resolved =>
         handleResolution()
 
+  def scheduleNextRound(): Unit =
+    if rs.game.balance > 0 then
+      dom.window.setTimeout(() => {
+        if rs.game.phase == GamePhase.Resolved then
+          update(newRound)
+          updateUI()
+      }, 3500)
+
   // Run an action that may end the round: reveal the dealer if so, else refresh.
   def revealAndResolve(): Unit =
     rs.holeCard match
@@ -288,10 +303,12 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
         animateFlip(hc.asInstanceOf[Mesh], () =>
           update(dealerReveal)
           updateUI()
+          scheduleNextRound()
         )
       case _ =>
         update(dealerReveal)
         updateUI()
+        scheduleNextRound()
 
   def afterAction(): Unit =
     rs.game.phase match

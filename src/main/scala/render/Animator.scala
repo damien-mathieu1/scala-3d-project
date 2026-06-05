@@ -12,17 +12,19 @@ object Animator:
 private def easeOut(t: Double): Double = 1 - Math.pow(1 - t.min(1.0), 3)
 private def now(): Double = dom.window.performance.now()
 
-def animateSlide(mesh: Mesh, targetX: Double, delay: Double = 0): Unit =
+def animateSlide(mesh: Mesh, targetX: Double, targetY: Double, startX: Double, startY: Double, delay: Double = 0): Unit =
   val duration = 450.0
-  val startX   = targetX + 4.0
   mesh.position.x = startX
+  mesh.position.y = startY
   val t0 = now()
   Animator.add(() =>
     val elapsed = now() - t0 - delay
     if elapsed < 0 then true // waiting for delay
     else
       val t = (elapsed / duration).min(1.0)
-      mesh.position.x = startX + (targetX - startX) * easeOut(t)
+      val e = easeOut(t)
+      mesh.position.x = startX + (targetX - startX) * e
+      mesh.position.y = startY + (targetY - startY) * e
       t < 1.0
   )
 
