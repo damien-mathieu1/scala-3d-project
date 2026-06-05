@@ -56,10 +56,11 @@ def startBlackjack(scene: Scene, camera: PerspectiveCamera, canvas: dom.html.Can
 
   val DECK_X = 3.5
   val DECK_Y = 1.0
-  for i <- 0 to 4 do
-    val dm = makeHoleCardMesh(Card(Rank.Ace, Suit.Spades))
-    dm.position.set(DECK_X, DECK_Y, i * 0.01)
-    scene.add(dm)
+  val deckMesh = makeDeckMesh()
+  // sit the block so its base is at the table and its top is at DECK_TOP_Z
+  deckMesh.position.set(DECK_X, DECK_Y, DECK_VISUAL_D / 2)
+  deckMesh.rotation.asInstanceOf[js.Dynamic].set(0.0, 0.0, 0.0)
+  scene.add(deckMesh)
 
   var rs: RenderState = RenderState(bettingState().unsafeRun())
   def update(f: RenderState => RenderState): Unit = rs = f(rs)
